@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon"
+        href="https://mgx-backend-cdn.metadl.com/generate/images/746946/2026-04-10/8fdc8732-aad6-4a81-b4a9-1666b1b85231.png"
+        type="image/png">
+    <title>Annona - Smart Contribution Tracker</title>
+    <link rel="stylesheet" href="./style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+
+<body>
+    <!-- ==================== AUTH PAGE ==================== -->
+    <section id="auth-page" class="page active">
+        <div class="auth-container">
+            <div class="auth-left">
+                <div class="auth-brand">
+                    <img src="logo-bg.png" alt="Annona Logo" class="auth-logo-img">
+                    <h1>Annona</h1>
+                    <p>Smart Group Work Contribution Tracking</p>
+                </div>
+                <div class="auth-features">
+                    <div class="auth-feature-item">
+                        <i data-lucide="clipboard-list" class="feature-icon"></i>
+                        <span>Track tasks & contributions</span>
+                    </div>
+                    <div class="auth-feature-item">
+                        <i data-lucide="users" class="feature-icon"></i>
+                        <span>Collaborate with your team</span>
+                    </div>
+                    <div class="auth-feature-item">
+                        <i data-lucide="bar-chart-3" class="feature-icon"></i>
+                        <span>Visualize team analytics</span>
+                    </div>
+                </div>
+            </div>
+            <div class="auth-right">
+                <div class="auth-card">
+                    <h2 id="auth-title">Welcome Back</h2>
+                    <p id="auth-subtitle">Sign in to your account</p>
+                    <form id="auth-form" onsubmit="return false;">
+                        <div id="name-field" class="form-group hidden">
+                            <label for="auth-name">Full Name</label>
+                            <input type="text" id="auth-name" placeholder="Enter your name">
+                        </div>
+                        <div class="form-group">
+                            <label for="auth-email">Email Address</label>
+                            <input type="email" id="auth-email" placeholder="Enter your email">
+                        </div>
+                        <div class="form-group">
+                            <label for="auth-password">Password</label>
+                            <input type="password" id="auth-password" placeholder="Enter your password">
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-full" id="auth-btn" onclick="handleAuth()">
+                            Sign In
+                        </button>
+                    </form>
+                    <p class="auth-toggle">
+                        <span id="auth-toggle-text">Don't have an account?</span>
+                        <a href="#" id="auth-toggle-link" onclick="toggleAuth(event)">Register</a>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ==================== MAIN APP ==================== -->
+    <section id="app" class="hidden">
+        <!-- TOP NAVBAR -->
+        <nav class="navbar">
+            <div class="nav-left">
+                <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
+                <div class="nav-brand">
+                    <img src="logo-bg.png" alt="Annona" class="nav-logo-img">
+                    <span class="nav-title">Annona</span>
+                </div>
+            </div>
+            <div class="nav-right">
+                <button class="nav-icon-btn" title="Notifications">
+                    <i data-lucide="bell" class="nav-icon"></i>
+                    <span class="notification-badge">3</span>
+                </button>
+                <div class="nav-user" onclick="toggleUserMenu()">
+                    <div class="nav-avatar-icon">
+                        <i data-lucide="user"></i>
+                    </div>
+                    <span class="nav-username">SpaceHolder</span>
+                    <div class="user-dropdown hidden" id="user-dropdown">
+                        <a href="#" onclick="event.preventDefault()">Profile</a>
+                        <a href="#" onclick="event.preventDefault()">Settings</a>
+                        <a href="#" onclick="logout(event)">Logout</a>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <div class="app-body">
+            <!-- SIDEBAR -->
+            <aside class="sidebar" id="sidebar">
+                <ul class="sidebar-menu">
+                    <li class="sidebar-item active" data-page="dashboard" onclick="navigateTo('dashboard', this)">
+                        <i data-lucide="layout-dashboard" class="sidebar-icon"></i>
+                        <span class="sidebar-text">Dashboard</span>
+                    </li>
+
+                    <li class="sidebar-item" data-page="tasks" onclick="navigateTo('tasks', this)">
+                        <i data-lucide="check-square" class="sidebar-icon"></i>
+                        <span class="sidebar-text">My Tasks</span>
+                    </li>
+
+                    <li class="sidebar-item" data-page="team" onclick="navigateTo('team', this)">
+                        <i data-lucide="users" class="sidebar-icon"></i>
+                        <span class="sidebar-text">Team</span>
+                    </li>
+
+                    <li class="sidebar-item" data-page="analytics" onclick="navigateTo('analytics', this)">
+                        <i data-lucide="bar-chart-3" class="sidebar-icon"></i>
+                        <span class="sidebar-text">Analytics</span>
+                    </li>
+
+                    <li class="sidebar-item" data-page="activity" onclick="navigateTo('activity', this)">
+                        <i data-lucide="activity" class="sidebar-icon"></i>
+                        <span class="sidebar-text">Activity</span>
+                    </li>
+
+                    <li class="sidebar-item" data-page="settings" onclick="navigateTo('settings', this)">
+                        <i data-lucide="settings" class="sidebar-icon"></i>
+                        <span class="sidebar-text">Settings</span>
+                    </li>
+                </ul>
+            </aside>
+
+            <!-- MAIN CONTENT -->
+            <main class="main-content">
+                <!-- DASHBOARD -->
+                <div id="page-dashboard" class="content-page active">
+                    <div class="page-header">
+                        <h2>Welcome back, <span class="text-primary">(SpaceHolder)</span></h2>
+                        <p>Here's what's happening with your projects today.</p>
+                    </div>
+                    <div class="summary-cards">
+                        <div class="summary-card card-completed">
+                            <div class="card-icon">
+                                <i data-lucide="check-circle"></i>
+                            </div>
+                            <div class="card-info">
+                                <h3 id="stat-completed">12</h3>
+                                <p>Tasks Completed</p>
+                            </div>
+                        </div>
+
+                        <div class="summary-card card-progress">
+                            <div class="card-icon">
+                                <i data-lucide="refresh-cw"></i>
+                            </div>
+                            <div class="card-info">
+                                <h3 id="stat-progress">5</h3>
+                                <p>In Progress</p>
+                            </div>
+                        </div>
+
+                        <div class="summary-card card-score">
+                            <div class="card-icon">
+                                <i data-lucide="star"></i>
+                            </div>
+                            <div class="card-info">
+                                <h3 id="stat-score">87</h3>
+                                <p>Contribution Score</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="dashboard-grid">
+                        <div class="dash-section">
+                            <h3>Recent Tasks</h3>
+                            <div class="recent-tasks-list" id="recent-tasks-list"></div>
+                        </div>
+                        <div class="dash-section">
+                            <h3>Team Activity</h3>
+                            <div class="mini-activity-list" id="mini-activity-list"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TASK BOARD -->
+                <div id="page-tasks" class="content-page">
+                    <div class="page-header">
+                        <h2>Task Board</h2>
+                        <button class="btn btn-primary" onclick="openTaskModal()">+ Add Task</button>
+                    </div>
+                    <div class="kanban-board">
+                        <div class="kanban-column" id="col-todo" ondrop="dropTask(event, 'todo')"
+                            ondragover="allowDrop(event)" ondragenter="dragEnter(event)" ondragleave="dragLeave(event)">
+                            <div class="column-header">
+                                <span class="column-dot dot-todo"></span>
+                                <h3>To Do</h3>
+                                <span class="column-count" id="count-todo">0</span>
+                            </div>
+                            <div class="column-tasks" id="tasks-todo"></div>
+                        </div>
+                        <div class="kanban-column" id="col-inprogress" ondrop="dropTask(event, 'inprogress')"
+                            ondragover="allowDrop(event)" ondragenter="dragEnter(event)" ondragleave="dragLeave(event)">
+                            <div class="column-header">
+                                <span class="column-dot dot-inprogress"></span>
+                                <h3>In Progress</h3>
+                                <span class="column-count" id="count-inprogress">0</span>
+                            </div>
+                            <div class="column-tasks" id="tasks-inprogress"></div>
+                        </div>
+                        <div class="kanban-column" id="col-done" ondrop="dropTask(event, 'done')"
+                            ondragover="allowDrop(event)" ondragenter="dragEnter(event)" ondragleave="dragLeave(event)">
+                            <div class="column-header">
+                                <span class="column-dot dot-done"></span>
+                                <h3>Done</h3>
+                                <span class="column-count" id="count-done">0</span>
+                            </div>
+                            <div class="column-tasks" id="tasks-done"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TEAM PAGE -->
+                <div id="page-team" class="content-page">
+                    <div class="page-header">
+                        <h2>Team Members</h2>
+                        <p>Track your team's contributions and performance</p>
+                    </div>
+                    <div class="team-grid" id="team-grid"></div>
+                    <div class="leaderboard-section">
+                        <h3 class="section-title">
+                            <i data-lucide="trophy" class="section-icon"></i>
+                            Leaderboard
+                        </h3>
+                        <div class="leaderboard" id="leaderboard"></div>
+                    </div>
+                </div>
+
+                <!-- ANALYTICS PAGE -->
+                <div id="page-analytics" class="content-page">
+                    <div class="page-header">
+                        <h2>Analytics Dashboard</h2>
+                        <p>Visualize team performance and contributions</p>
+                    </div>
+                    <div class="charts-grid">
+                        <div class="chart-card">
+                            <h3>Contribution Percentage</h3>
+                            <div class="chart-container">
+                                <canvas id="pieChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="chart-card">
+                            <h3>Tasks Completed per Member</h3>
+                            <div class="chart-container">
+                                <canvas id="barChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="formula-card">
+                        <h3>Contribution Score Formula</h3>
+                        <div class="formula-display">
+                            <code>Score = (tasks_completed × 5) + (hours_logged × 2) + (activity_actions × 1)</code>
+                        </div>
+                        <div class="formula-breakdown" id="formula-breakdown"></div>
+                    </div>
+                </div>
+
+                <!-- ACTIVITY PAGE -->
+                <div id="page-activity" class="content-page">
+                    <div class="page-header">
+                        <h2>Activity Log</h2>
+                        <p>Recent actions from your team</p>
+                    </div>
+                    <div class="activity-timeline" id="activity-timeline"></div>
+                </div>
+
+                <!-- SETTINGS PAGE -->
+                <div id="page-settings" class="content-page">
+                    <div class="page-header">
+                        <h2>Settings</h2>
+                        <p>Manage your account preferences</p>
+                    </div>
+                    <div class="settings-card">
+                        <div class="settings-section">
+                            <h3>Profile</h3>
+                            <div class="form-group">
+                                <label>Display Name</label>
+                                <input type="text" value="SpaceHolder" class="settings-input">
+                            </div>
+                            <div class="form-group">
+                                <label>Email</label>
+                                <input type="email" value="spaceholder@stu.aydin.edu.tr" class="settings-input">
+                            </div>
+                        </div>
+                        <div class="settings-section">
+                            <h3>Notifications</h3>
+                            <label class="toggle-label">
+                                <input type="checkbox" checked>
+                                <span>Email notifications</span>
+                            </label>
+                            <label class="toggle-label">
+                                <input type="checkbox" checked>
+                                <span>Task reminders</span>
+                            </label>
+                        </div>
+                        <button class="btn btn-primary">Save Changes</button>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </section>
+
+    <!-- TASK MODAL -->
+    <div class="modal-overlay hidden" id="task-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Add New Task</h3>
+                <button class="modal-close" onclick="closeTaskModal()">✕</button>
+            </div>
+            <form id="task-form" onsubmit="return false;">
+                <div class="form-group">
+                    <label for="task-title">Task Title</label>
+                    <input type="text" id="task-title" placeholder="Enter task title" required>
+                </div>
+                <div class="form-group">
+                    <label for="task-assignee">Assign To</label>
+                    <select id="task-assignee">
+                        <option value="Mohammed">Mohammed</option>
+                        <option value="Ali">Ali</option>
+                        <option value="Sara">Sara</option>
+                        <option value="Fatima">Fatima</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="task-due">Due Date</label>
+                    <input type="date" id="task-due">
+                </div>
+                <div class="form-group">
+                    <label for="task-status">Status</label>
+                    <select id="task-status">
+                        <option value="todo">To Do</option>
+                        <option value="inprogress">In Progress</option>
+                        <option value="done">Done</option>
+                    </select>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeTaskModal()">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="addTask()">Add Task</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="./script.js"></script>
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+
+</html>
