@@ -1,49 +1,331 @@
-// ==================== DATA ====================
-const AVATARS = {
-    Mohammed: 'avatar.jpg',
-    Ali: 'avatar.jpg',
-    Sara: 'avatar.jpg',
-    Fatima: 'avatar.jpg'
-};
+import { auth, db } from "./firebase.js";
+import {
+    signInWithEmailAndPassword,
+    createUserWithEmailAndPassword
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import {
+    collection,
+    addDoc,
+    doc,
+    updateDoc,
+    deleteDoc,
+    onSnapshot,
+    serverTimestamp,
+    query,
+    orderBy,
+    setDoc,
+    getDocs,
+    getDoc,
+    where
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-const teamMembers = [
-    { name: 'Mohammed', role: 'Team Lead', tasksCompleted: 12, hoursLogged: 24, activityActions: 15, avatar: AVATARS.Mohammed },
-    { name: 'Ali', role: 'Developer', tasksCompleted: 9, hoursLogged: 18, activityActions: 12, avatar: AVATARS.Ali },
-    { name: 'Sara', role: 'Designer', tasksCompleted: 11, hoursLogged: 22, activityActions: 18, avatar: AVATARS.Sara },
-    { name: 'Fatima', role: 'Researcher', tasksCompleted: 7, hoursLogged: 14, activityActions: 8, avatar: AVATARS.Fatima }
-];
 
-let tasks = [
-    { id: 1, title: 'Design login page UI', assignee: 'Sara', due: '2026-04-12', status: 'done' },
-    { id: 2, title: 'Set up project structure', assignee: 'Mohammed', due: '2026-04-10', status: 'done' },
-    { id: 3, title: 'Create database schema', assignee: 'Ali', due: '2026-04-14', status: 'inprogress' },
-    { id: 4, title: 'Write API documentation', assignee: 'Fatima', due: '2026-04-15', status: 'inprogress' },
-    { id: 5, title: 'Implement task board', assignee: 'Mohammed', due: '2026-04-16', status: 'inprogress' },
-    { id: 6, title: 'Design team dashboard', assignee: 'Sara', due: '2026-04-18', status: 'todo' },
-    { id: 7, title: 'User authentication flow', assignee: 'Ali', due: '2026-04-17', status: 'todo' },
-    { id: 8, title: 'Research analytics tools', assignee: 'Fatima', due: '2026-04-19', status: 'todo' },
-    { id: 9, title: 'Create contribution algorithm', assignee: 'Mohammed', due: '2026-04-11', status: 'done' },
-    { id: 10, title: 'Design notification system', assignee: 'Sara', due: '2026-04-13', status: 'done' },
-    { id: 11, title: 'Build activity log component', assignee: 'Ali', due: '2026-04-20', status: 'todo' },
-    { id: 12, title: 'Write unit tests', assignee: 'Mohammed', due: '2026-04-12', status: 'done' }
-];
-
-const activityLog = [
-    { user: 'Mohammed', action: 'completed task', target: 'Write unit tests', type: 'completed', time: '2 minutes ago' },
-    { user: 'Sara', action: 'completed task', target: 'Design notification system', type: 'completed', time: '15 minutes ago' },
-    { user: 'Ali', action: 'moved task to In Progress', target: 'Create database schema', type: 'updated', time: '30 minutes ago' },
-    { user: 'Fatima', action: 'created a new task', target: 'Research analytics tools', type: 'created', time: '1 hour ago' },
-    { user: 'Mohammed', action: 'completed task', target: 'Create contribution algorithm', type: 'completed', time: '2 hours ago' },
-    { user: 'Sara', action: 'updated task status', target: 'Design login page UI', type: 'updated', time: '3 hours ago' },
-    { user: 'Ali', action: 'created a new task', target: 'Build activity log component', type: 'created', time: '4 hours ago' },
-    { user: 'Mohammed', action: 'completed task', target: 'Set up project structure', type: 'completed', time: '5 hours ago' },
-    { user: 'Fatima', action: 'moved task to In Progress', target: 'Write API documentation', type: 'updated', time: '6 hours ago' },
-    { user: 'Sara', action: 'completed task', target: 'Design login page UI', type: 'completed', time: '1 day ago' }
-];
-
-let nextTaskId = 13;
+let tasks = [];
 let isLoginMode = true;
-let draggedTaskId = null;
+let currentUser = null;
+let currentTeamId = null;
+let userTeams = [];
+let currentUserName = "User";
+let unsubscribeTasks = null;
+let unsubscribeActivity = null;
+let teamUsers = [];
+let activityData = [];
+
+async function saveTeam() {
+    const newName = document.getElementById("settings-team-name").value.trim();
+
+    if (!newName) {
+        alert("Team name cannot be empty");
+        return;
+    }
+
+    await updateDoc(doc(db, "teams", currentTeamId), {
+        name: newName
+    });
+
+    alert("Team updated!");
+
+    // refresh dropdown
+    await loadUserTeams(currentUser.uid);
+}
+
+async function saveProfile() {
+    const newName = document.getElementById("settings-name").value.trim();
+
+    if (!newName) {
+        alert("Name cannot be empty");
+        return;
+    }
+
+    await updateDoc(doc(db, "users", currentUser.uid), {
+        name: newName
+    });
+
+    currentUserName = newName;
+
+    // update UI instantly
+    document.querySelector('.nav-username').textContent = newName;
+    document.getElementById("welcome-name").textContent = newName;
+
+    alert("Profile updated!");
+}
+
+async function loadSettings() {
+    if (!currentUser) return;
+
+    // 🔥 User data
+    const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+    const userData = userDoc.data();
+
+    document.getElementById("settings-name").value = userData.name || "";
+    document.getElementById("settings-email").value = userData.email || "";
+
+    // 🔥 Team data
+    if (currentTeamId) {
+        const teamDoc = await getDoc(doc(db, "teams", currentTeamId));
+        const teamData = teamDoc.data();
+
+        document.getElementById("settings-team-name").value = teamData.name || "";
+    }
+}
+
+function getUserTaskStats(userId) {
+    const userTasks = tasks.filter(t => t.assigneeId === userId);
+
+    const completed = userTasks.filter(t => t.status === "done").length;
+    const inProgress = userTasks.filter(t => t.status === "inprogress").length;
+    const total = userTasks.length;
+
+    return {
+        completed,
+        inProgress,
+        total
+    };
+}
+
+function renderAssigneeOptions() {
+    const select = document.getElementById("task-assignee");
+
+    select.innerHTML = teamUsers.map(user => `
+        <option value="${user.id}">${user.name}</option>
+    `).join('');
+}
+
+async function loadTeamUsers() {
+    if (!currentTeamId) return;
+
+    const q = query(
+        collection(db, "teamMembers"),
+        where("teamId", "==", currentTeamId)
+    );
+
+    const snapshot = await getDocs(q);
+
+    teamUsers = [];
+
+    for (const docSnap of snapshot.docs) {
+        const data = docSnap.data();
+
+        const userDoc = await getDoc(doc(db, "users", data.userId));
+        const userData = userDoc.data();
+
+        teamUsers.push({
+            id: data.userId,
+            name: userData.name
+        });
+    }
+
+    renderAssigneeOptions();
+}
+
+function switchTeam(teamId) {
+    if (teamId === currentTeamId) return;
+
+    currentTeamId = teamId;
+
+    listenToTasks();
+    listenToActivity();
+    showInviteCode();
+    loadTeamUsers().then(() => {
+        renderTeam();
+        renderLeaderboard(); // 🔥
+    });
+}
+
+function renderTeamSelector() {
+    const select = document.getElementById("team-selector");
+
+    if (!select) return;
+
+    select.innerHTML = userTeams.map(team => `
+        <option value="${team.id}" ${team.id === currentTeamId ? 'selected' : ''}>
+            ${team.name}
+        </option>
+    `).join('');
+}
+
+async function joinTeam() {
+    const code = document.getElementById("invite-input").value.trim();
+
+    if (!code) {
+        alert("Enter invite code");
+        return;
+    }
+
+    const q = query(
+        collection(db, "teams"),
+        where("inviteCode", "==", code)
+    );
+
+    const snapshot = await getDocs(q);
+
+    if (snapshot.empty) {
+        alert("Invalid invite code");
+        return;
+    }
+
+    const teamDoc = snapshot.docs[0];
+    const teamId = teamDoc.id;
+
+    // 🔥 Add membership
+    await addDoc(collection(db, "teamMembers"), {
+        userId: currentUser.uid,
+        teamId: teamId,
+        role: "member"
+    });
+
+    alert("Joined team successfully!");
+
+    // reload teams
+    await loadUserTeams(currentUser.uid);
+}
+
+async function showInviteCode() {
+    if (!currentTeamId) return;
+
+    const teamDoc = await getDoc(doc(db, "teams", currentTeamId));
+    const teamData = teamDoc.data();
+
+    document.getElementById("invite-code").textContent = teamData.inviteCode;
+}
+
+function toggleInviteModal() {
+    document.getElementById("invite-modal").classList.remove("hidden");
+    showInviteCode();
+}
+
+function closeInviteModal() {
+    document.getElementById("invite-modal").classList.add("hidden");
+}
+
+function generateInviteCode() {
+    return Math.random().toString(36).substring(2, 8).toUpperCase();
+}
+
+async function loadUserTeams(userId) {
+    console.log("Loading teams for:", userId);
+
+    const q = query(
+        collection(db, "teamMembers"),
+        where("userId", "==", userId)
+    );
+
+    const snapshot = await getDocs(q);
+
+    console.log("Docs found:", snapshot.size); // 👈 ADD THIS
+
+    userTeams = [];
+
+    for (const docSnap of snapshot.docs) {
+        console.log("TeamMember:", docSnap.data()); // 👈 ADD THIS
+
+        const data = docSnap.data();
+
+        const teamDoc = await getDoc(doc(db, "teams", data.teamId));
+        const teamData = teamDoc.data();
+
+        userTeams.push({
+            id: data.teamId,
+            name: teamData.name
+        });
+    }
+
+    currentTeamId = userTeams[0]?.id;
+    renderTeamSelector();
+}
+
+function getCurrentUserName() {
+    const user = auth.currentUser;
+
+    if (!user) return "User";
+
+    return user.email.split("@")[0];
+}
+
+function getDisplayName(email) {
+    return email.split("@")[0];
+}
+
+function listenToActivity() {
+    if (!currentTeamId) return;
+
+    // 🔥 STOP old listener
+    if (unsubscribeActivity) unsubscribeActivity();
+
+    const q = query(
+        collection(db, "activity"),
+        where("teamId", "==", currentTeamId),
+        orderBy("timestamp", "desc")
+    );
+
+    unsubscribeActivity = onSnapshot(q, (snapshot) => {
+        activityData = [];
+
+        snapshot.forEach((doc) => {
+            const data = doc.data();
+
+            activityData.push({
+                ...data,
+                time: formatTimeAgo(data.timestamp)
+            });
+        });
+
+        renderActivityLog(activityData);
+        renderDashboard(); // 🔥 IMPORTANT
+    });
+}
+
+function listenToTasks() {
+    if (!currentTeamId) return;
+
+    // 🔥 STOP old listener
+    if (unsubscribeTasks) unsubscribeTasks();
+
+    const q = query(
+        collection(db, "tasks"),
+        where("teamId", "==", currentTeamId)
+    );
+
+    unsubscribeTasks = onSnapshot(q, (snapshot) => {
+        tasks = [];
+
+        snapshot.forEach((doc) => {
+            tasks.push({
+                id: doc.id,
+                ...doc.data()
+            });
+        });
+
+        renderTasks();
+        updateStats();
+        renderDashboard();
+        renderTeam();
+        renderLeaderboard();
+    });
+}
+
+
+
 
 // ==================== AUTH ====================
 function toggleAuth(e) {
@@ -73,11 +355,102 @@ function toggleAuth(e) {
     }
 }
 
+
+
 function handleAuth() {
-    document.getElementById('auth-page').classList.remove('active');
+    const email = document.getElementById('auth-email').value;
+    const password = document.getElementById('auth-password').value;
+
+    if (!email || !password) {
+        alert("Please enter email and password");
+        return;
+    }
+
+    if (isLoginMode) {
+        // LOGIN
+        signInWithEmailAndPassword(auth, email, password)
+            .then((userCredential) => {
+                enterApp(userCredential.user);
+            })
+            .catch((error) => {
+                alert(error.message);
+            });
+
+    } else {
+        // REGISTER
+
+
+        const name = document.getElementById('auth-name').value;
+
+        createUserWithEmailAndPassword(auth, email, password)
+            .then(async (userCredential) => {
+
+                const user = userCredential.user;
+
+                // 🔥 1. Create team
+                const teamRef = doc(collection(db, "teams"));
+                const teamId = teamRef.id;
+
+                const inviteCode = generateInviteCode();
+
+                await setDoc(teamRef, {
+                    name: name + "'s Team",
+                    ownerId: user.uid,
+                    inviteCode: inviteCode
+                });
+
+                // 🔥 2. Save user
+                await setDoc(doc(db, "users", user.uid), {
+                    uid: user.uid,
+                    name: name,
+                    email: email
+                });
+
+                // 🔥 3. Add membership
+                await addDoc(collection(db, "teamMembers"), {
+                    userId: user.uid,
+                    teamId: teamId,
+                    role: "owner"
+                });
+
+                // 🔥 4. Enter app
+                enterApp(user);
+            })
+            .catch((error) => {
+                alert(error.message);
+            })
+            .catch((error) => {
+                alert(error.message);
+            });
+    }
+}
+
+async function enterApp(user) {
+    currentUser = user;
+
     document.getElementById('auth-page').classList.add('hidden');
     document.getElementById('app').classList.remove('hidden');
-    initApp();
+
+    // 🔥 Get user info
+    const userDoc = await getDoc(doc(db, "users", user.uid));
+    const userData = userDoc.data();
+
+    currentUserName = userData.name || "User";
+
+    document.querySelector('.nav-username').textContent = currentUserName;
+    document.getElementById("welcome-name").textContent = currentUserName;
+
+    // 🔥 Load teams
+    await loadUserTeams(user.uid);
+    await loadTeamUsers(); // 🔥 ADD THIS
+    await loadUserTeams(user.uid);
+    await showInviteCode();
+    listenToTasks();
+    listenToActivity();
+    renderTeam();
+    renderLeaderboard();
+    renderTeam(); // 🔥 ADD THIS
+
 }
 
 function logout(e) {
@@ -104,6 +477,9 @@ function navigateTo(page, element) {
     if (window.innerWidth <= 768) {
         document.getElementById('sidebar').classList.remove('open');
     }
+    if (page === 'settings') {
+        loadSettings();
+    }
 }
 
 function toggleSidebar() {
@@ -115,7 +491,7 @@ function toggleUserMenu() {
 }
 
 // Close dropdown on outside click
-document.addEventListener('click', function(e) {
+document.addEventListener('click', function (e) {
     const userMenu = document.querySelector('.nav-user');
     const dropdown = document.getElementById('user-dropdown');
     if (dropdown && !userMenu.contains(e.target)) {
@@ -128,7 +504,6 @@ function initApp() {
     renderTasks();
     renderTeam();
     renderLeaderboard();
-    renderActivityLog();
     renderDashboard();
     updateStats();
 }
@@ -136,7 +511,6 @@ function initApp() {
 // ==================== DASHBOARD ====================
 function renderDashboard() {
     const recentList = document.getElementById('recent-tasks-list');
-    const miniActivity = document.getElementById('mini-activity-list');
 
     const recentTasks = tasks.slice(0, 5);
     recentList.innerHTML = recentTasks.map(t => `
@@ -146,16 +520,16 @@ function renderDashboard() {
         </div>
     `).join('');
 
-    const recentActivities = activityLog.slice(0, 5);
-    miniActivity.innerHTML = recentActivities.map(a => `
-        <div class="mini-activity-item">
-            <span class="activity-dot"></span>
-            <div>
-                <div><strong>${a.user}</strong> ${a.action} '${a.target}'</div>
-                <div class="activity-time">${a.time}</div>
-            </div>
-        </div>
-    `).join('');
+    const recentActivityList = document.getElementById('mini-activity-list');
+    const recentActivity = activityData.slice(0, 5);
+    recentActivityList.innerHTML = recentActivity.map(a => `
+    <div class="recent-task-item">
+        <span class="task-name">
+            <strong>${a.user}</strong> ${a.action}
+        </span>
+        <span class="status-badge">${a.time}</span>
+    </div>
+`).join('');
 }
 
 function formatStatus(status) {
@@ -163,19 +537,26 @@ function formatStatus(status) {
     return map[status] || status;
 }
 
+
 function updateStats() {
     const completed = tasks.filter(t => t.status === 'done').length;
     const inProgress = tasks.filter(t => t.status === 'inprogress').length;
+
     document.getElementById('stat-completed').textContent = completed;
     document.getElementById('stat-progress').textContent = inProgress;
 
-    const mohammed = teamMembers.find(m => m.name === 'Mohammed');
-    const score = calculateScore(mohammed);
-    document.getElementById('stat-score').textContent = score;
+    // 🔥 TOTAL TEAM SCORE
+    const totalScore = teamUsers.reduce((sum, user) => {
+        return sum + calculateUserScore(user.id);
+    }, 0);
+
+    document.getElementById('stat-score').textContent = totalScore;
 }
 
-function calculateScore(member) {
-    return (member.tasksCompleted * 5) + (member.hoursLogged * 2) + (member.activityActions * 1);
+function calculateUserScore(userId) {
+    const stats = getUserTaskStats(userId);
+
+    return (stats.completed * 5) + (stats.inProgress * 2);
 }
 
 // ==================== TASK BOARD ====================
@@ -190,23 +571,29 @@ function renderTasks() {
         const count = document.getElementById('count-' + status);
         count.textContent = columns[status].length;
 
-        container.innerHTML = columns[status].map(t => `
-            <div class="task-card" draggable="true" data-id="${t.id}" data-status="${t.status}"
-                 ondragstart="dragStart(event, ${t.id})" ondragend="dragEnd(event)">
-                <div class="task-card-title">${t.title}</div>
-                <div class="task-card-meta">
-                    <div class="task-card-assignee">
-                        <img src="${AVATARS[t.assignee] || AVATARS.Mohammed}" alt="${t.assignee}">
-                        <span>${t.assignee}</span>
-                    </div>
-                    <span class="task-card-due">📅 ${formatDate(t.due)}</span>
+
+        container.innerHTML = columns[status].map(t => {
+            const user = teamUsers.find(u => u.id === t.assigneeId);
+            const assigneeName = user ? user.name : "Unknown";
+
+            return `
+        <div class="task-card" draggable="true" data-id="${t.id}" data-status="${t.status}"
+             ondragstart="dragStart(event, '${t.id}')" ondragend="dragEnd(event)">
+            <div class="task-card-title">${t.title}</div>
+            <div class="task-card-meta">
+                <div class="task-card-assignee">
+                    <img src="avatar.jpg" alt="${assigneeName}">
+                    <span>${assigneeName}</span>
                 </div>
-                <div class="task-card-actions">
-                    ${t.status !== 'done' ? `<button onclick="moveTask(${t.id}, '${getNextStatus(t.status)}')">Move →</button>` : ''}
-                    <button onclick="deleteTask(${t.id})">Delete</button>
-                </div>
+                <span class="task-card-due">📅 ${formatDate(t.due)}</span>
             </div>
-        `).join('');
+            <div class="task-card-actions">
+                ${t.status !== 'done' ? `<button onclick="moveTask('${t.id}', '${getNextStatus(t.status)}')">Move →</button>` : ''}
+                <button onclick="deleteTask('${t.id}')">Delete</button>
+            </div>
+        </div>
+    `;
+        }).join('');
     });
 }
 
@@ -221,44 +608,53 @@ function getNextStatus(status) {
     return flow[status] || status;
 }
 
-function moveTask(id, newStatus) {
-    const task = tasks.find(t => t.id === id);
-    if (task) {
-        const oldStatus = task.status;
-        task.status = newStatus;
-        renderTasks();
-        updateStats();
-        renderDashboard();
+async function moveTask(id, newStatus) {
+    try {
+        const taskRef = doc(db, "tasks", id);
 
-        activityLog.unshift({
-            user: task.assignee,
-            action: `moved task to ${formatStatus(newStatus)}`,
-            target: task.title,
-            type: 'updated',
-            time: 'Just now'
+        await updateDoc(taskRef, {
+            status: newStatus
         });
-        renderActivityLog();
+
+        const task = tasks.find(t => t.id === id);
+
+        await logActivity(
+            getCurrentUserName(),
+            `moved task to ${formatStatus(newStatus)}`,
+            task?.title || "Task",
+            "updated"
+        );
+
+        listenToTasks(); // reload from Firebase
+
+    } catch (error) {
+        console.error("Error updating task:", error);
     }
 }
+async function deleteTask(id) {
+    try {
+        await deleteDoc(doc(db, "tasks", id));
 
-function deleteTask(id) {
-    tasks = tasks.filter(t => t.id !== id);
-    renderTasks();
-    updateStats();
-    renderDashboard();
+        await logActivity(
+            getCurrentUserName(),
+            "deleted task",
+            "Task",
+            "deleted"
+        );
+
+    } catch (error) {
+        console.error("Error deleting task:", error);
+    }
 }
 
 // ==================== DRAG AND DROP ====================
 function dragStart(e, id) {
-    draggedTaskId = id;
-    e.target.classList.add('dragging');
-    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData("text/plain", id);
+    e.target.classList.add("dragging");
 }
 
 function dragEnd(e) {
-    e.target.classList.remove('dragging');
-    draggedTaskId = null;
-    document.querySelectorAll('.kanban-column').forEach(col => col.classList.remove('drag-over'));
+    e.target.classList.remove("dragging");
 }
 
 function allowDrop(e) {
@@ -280,15 +676,13 @@ function dragLeave(e) {
 
 function dropTask(e, newStatus) {
     e.preventDefault();
-    const column = e.currentTarget;
-    column.classList.remove('drag-over');
 
-    if (draggedTaskId !== null) {
-        moveTask(draggedTaskId, newStatus);
-        draggedTaskId = null;
-    }
+    const id = e.dataTransfer.getData("text/plain");
+
+    if (!id) return;
+
+    moveTask(id, newStatus);
 }
-
 // ==================== TASK MODAL ====================
 function openTaskModal() {
     document.getElementById('task-modal').classList.remove('hidden');
@@ -303,9 +697,20 @@ function closeTaskModal() {
     document.getElementById('task-modal').classList.add('hidden');
 }
 
-function addTask() {
+async function logActivity(user, action, target, type) {
+    await addDoc(collection(db, "activity"), {
+        user,
+        action,
+        target,
+        type,
+        teamId: currentTeamId, // 🔥 IMPORTANT
+        timestamp: serverTimestamp()
+    });
+}
+
+async function addTask() {
     const title = document.getElementById('task-title').value.trim();
-    const assignee = document.getElementById('task-assignee').value;
+    const assigneeId = document.getElementById('task-assignee').value;
     const due = document.getElementById('task-due').value;
     const status = document.getElementById('task-status').value;
 
@@ -314,31 +719,29 @@ function addTask() {
         return;
     }
 
-    tasks.push({
-        id: nextTaskId++,
-        title: title,
-        assignee: assignee,
-        due: due || '2026-04-20',
-        status: status
+    const user = teamUsers.find(u => u.id === assigneeId);
+    const assigneeName = user ? user.name : "Unknown";
+
+    await addDoc(collection(db, "tasks"), {
+        title,
+        assigneeId,
+        due,
+        status,
+        teamId: currentTeamId
     });
 
-    activityLog.unshift({
-        user: assignee,
-        action: 'created a new task',
-        target: title,
-        type: 'created',
-        time: 'Just now'
-    });
+    await logActivity(
+        currentUserName,
+        "assigned task to " + assigneeName,
+        title,
+        "created"
+    );
 
     closeTaskModal();
-    renderTasks();
-    updateStats();
-    renderDashboard();
-    renderActivityLog();
 }
 
 // Close modal on overlay click
-document.addEventListener('click', function(e) {
+document.addEventListener('click', function (e) {
     if (e.target.id === 'task-modal') {
         closeTaskModal();
     }
@@ -347,23 +750,29 @@ document.addEventListener('click', function(e) {
 // ==================== TEAM ====================
 function renderTeam() {
     const grid = document.getElementById('team-grid');
-    const sorted = [...teamMembers].sort((a, b) => calculateScore(b) - calculateScore(a));
-    const topName = sorted[0].name;
+    if (!grid) return;
 
-    grid.innerHTML = teamMembers.map(m => {
-        const score = calculateScore(m);
-        const totalScore = teamMembers.reduce((sum, mem) => sum + calculateScore(mem), 0);
-        const percentage = Math.round((score / totalScore) * 100);
-        const isTop = m.name === topName;
+    const totalScore = teamUsers.reduce((sum, user) => {
+        return sum + calculateUserScore(user.id);
+    }, 0);
+
+    grid.innerHTML = teamUsers.map(user => {
+        const stats = getUserTaskStats(user.id);
+        const score = calculateUserScore(user.id);
+
+        const percentage = totalScore > 0
+            ? Math.round((score / totalScore) * 100)
+            : 0;
 
         return `
-            <div class="team-card ${isTop ? 'top-contributor' : ''}">
-                <img src="${m.avatar}" alt="${m.name}" class="team-avatar">
-                <h4>${m.name}</h4>
-                <p class="team-role">${m.role}</p>
+            <div class="team-card">
+                <img src="avatar.jpg" class="team-avatar">
+                <h4>${user.name}</h4>
+                <p class="team-role">Team Member</p>
+
                 <div class="team-stats">
                     <div class="team-stat">
-                        <div class="stat-value">${m.tasksCompleted}</div>
+                        <div class="stat-value">${stats.completed}</div>
                         <div class="stat-label">Tasks</div>
                     </div>
                     <div class="team-stat">
@@ -382,27 +791,55 @@ function renderTeam() {
 
 function renderLeaderboard() {
     const board = document.getElementById('leaderboard');
-    const sorted = [...teamMembers].sort((a, b) => calculateScore(b) - calculateScore(a));
-    const maxScore = calculateScore(sorted[0]);
+    if (!board) return;
 
-    board.innerHTML = sorted.map((m, i) => {
-        const score = calculateScore(m);
-        const barWidth = Math.round((score / maxScore) * 100);
+    // 🔥 Calculate scores for each user
+    const usersWithScore = teamUsers.map(user => {
+        const stats = getUserTaskStats(user.id);
+        const score = calculateUserScore(user.id);
+
+        return {
+            ...user,
+            score,
+            tasksCompleted: stats.completed
+        };
+    });
+
+    // 🔥 Sort by score descending
+    const sorted = usersWithScore.sort((a, b) => b.score - a.score);
+
+    const maxScore = sorted[0]?.score || 1;
+
+    board.innerHTML = sorted.map((user, i) => {
+        const barWidth = Math.round((user.score / maxScore) * 100);
+
+        const medal =
+            i === 0 ? '🥇' :
+                i === 1 ? '🥈' :
+                    i === 2 ? '🥉' :
+                        (i + 1);
+
         const rankClass = i === 0 ? 'rank-1' : '';
-        const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1);
 
         return `
             <div class="leaderboard-row ${rankClass}">
                 <span class="leaderboard-rank">${medal}</span>
-                <img src="${m.avatar}" alt="${m.name}" class="leaderboard-avatar">
+
+                <img src="avatar.jpg" class="leaderboard-avatar">
+
                 <div class="leaderboard-info">
-                    <div class="leaderboard-name">${m.name}</div>
-                    <div class="leaderboard-tasks">${m.tasksCompleted} tasks completed</div>
+                    <div class="leaderboard-name">${user.name}</div>
+                    <div class="leaderboard-tasks">
+                        ${user.tasksCompleted} tasks completed
+                    </div>
                 </div>
+
                 <div class="leaderboard-bar">
-                    <div class="leaderboard-bar-fill" style="width: ${barWidth}%"></div>
+                    <div class="leaderboard-bar-fill"
+                         style="width: ${barWidth}%"></div>
                 </div>
-                <span class="leaderboard-score">${score}</span>
+
+                <span class="leaderboard-score">${user.score}</span>
             </div>
         `;
     }).join('');
@@ -424,43 +861,23 @@ function renderPieChart() {
 
     if (pieChartInstance) pieChartInstance.destroy();
 
-    const labels = teamMembers.map(m => m.name);
-    const scores = teamMembers.map(m => calculateScore(m));
+    const labels = teamUsers.map(u => u.name);
+    const scores = teamUsers.map(u => calculateUserScore(u.id));
+
     const totalScore = scores.reduce((a, b) => a + b, 0);
-    const percentages = scores.map(s => Math.round((s / totalScore) * 100));
+    const percentages = scores.map(s =>
+        totalScore > 0 ? Math.round((s / totalScore) * 100) : 0
+    );
 
     pieChartInstance = new Chart(ctx, {
         type: 'doughnut',
         data: {
-            labels: labels,
+            labels,
             datasets: [{
                 data: percentages,
                 backgroundColor: ['#0b2e53', '#3b82f6', '#22c55e', '#f59e0b'],
-                borderWidth: 3,
-                borderColor: '#ffffff',
-                hoverOffset: 8
+                borderWidth: 3
             }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'bottom',
-                    labels: {
-                        padding: 16,
-                        usePointStyle: true,
-                        font: { family: 'Poppins', size: 12 }
-                    }
-                },
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            return context.label + ': ' + context.raw + '%';
-                        }
-                    }
-                }
-            }
         }
     });
 }
@@ -474,53 +891,29 @@ function renderBarChart() {
     barChartInstance = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: teamMembers.map(m => m.name),
+            labels: teamUsers.map(u => u.name),
             datasets: [{
                 label: 'Tasks Completed',
-                data: teamMembers.map(m => m.tasksCompleted),
-                backgroundColor: ['#0b2e53', '#3b82f6', '#22c55e', '#f59e0b'],
-                borderRadius: 8,
-                borderSkipped: false,
-                barThickness: 40
+                data: teamUsers.map(u => getUserTaskStats(u.id).completed),
+                backgroundColor: '#0b2e53'
             }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { display: false }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        stepSize: 2,
-                        font: { family: 'Poppins', size: 12 }
-                    },
-                    grid: { color: '#f0f0f0' }
-                },
-                x: {
-                    ticks: {
-                        font: { family: 'Poppins', size: 12 }
-                    },
-                    grid: { display: false }
-                }
-            }
         }
     });
 }
 
 function renderFormulaBreakdown() {
     const container = document.getElementById('formula-breakdown');
-    container.innerHTML = teamMembers.map(m => {
-        const score = calculateScore(m);
+
+    container.innerHTML = teamUsers.map(u => {
+        const stats = getUserTaskStats(u.id);
+        const score = calculateUserScore(u.id);
+
         return `
             <div class="formula-member">
-                <div class="member-name">${m.name}</div>
+                <div class="member-name">${u.name}</div>
                 <div class="member-calc">
-                    Tasks: ${m.tasksCompleted} × 5 = ${m.tasksCompleted * 5}<br>
-                    Hours: ${m.hoursLogged} × 2 = ${m.hoursLogged * 2}<br>
-                    Actions: ${m.activityActions} × 1 = ${m.activityActions}
+                    Tasks: ${stats.completed} × 5 = ${stats.completed * 5}<br>
+                    In Progress: ${stats.inProgress} × 2 = ${stats.inProgress * 2}
                 </div>
                 <div class="member-total">Total: ${score}</div>
             </div>
@@ -528,13 +921,31 @@ function renderFormulaBreakdown() {
     }).join('');
 }
 
+
+function formatTimeAgo(timestamp) {
+    if (!timestamp) return "Just now";
+
+    const now = new Date();
+    const time = timestamp.toDate();
+    const diff = Math.floor((now - time) / 1000);
+
+    if (diff < 60) return "Just now";
+    if (diff < 3600) return Math.floor(diff / 60) + " min ago";
+    if (diff < 86400) return Math.floor(diff / 3600) + " hrs ago";
+
+    return Math.floor(diff / 86400) + " days ago";
+}
+
 // ==================== ACTIVITY LOG ====================
-function renderActivityLog() {
+function renderActivityLog(activityLog) {
     const timeline = document.getElementById('activity-timeline');
+
     timeline.innerHTML = activityLog.map(a => `
         <div class="timeline-item type-${a.type}">
             <div class="timeline-content">
-                <div class="timeline-text"><strong>${a.user}</strong> ${a.action} '${a.target}'</div>
+                <div class="timeline-text">
+                    <strong>${a.user}</strong> ${a.action} '${a.target}'
+                </div>
                 <div class="timeline-time">${a.time}</div>
             </div>
         </div>
@@ -542,16 +953,45 @@ function renderActivityLog() {
 }
 
 // ==================== KEYBOARD SHORTCUTS ====================
-document.addEventListener('keydown', function(e) {
+document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') {
         closeTaskModal();
     }
 });
 
+
 // ==================== INIT ====================
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     // Set default date for task modal
     const today = new Date().toISOString().split('T')[0];
     const dueInput = document.getElementById('task-due');
     if (dueInput) dueInput.value = today;
 });
+
+window.handleAuth = handleAuth;
+window.toggleAuth = toggleAuth;
+window.logout = logout;
+window.navigateTo = navigateTo;
+window.toggleSidebar = toggleSidebar;
+window.toggleUserMenu = toggleUserMenu;
+window.openTaskModal = openTaskModal;
+window.closeTaskModal = closeTaskModal;
+window.addTask = addTask;
+window.moveTask = moveTask;
+window.deleteTask = deleteTask;
+window.dragStart = dragStart;
+window.getNextStatus = getNextStatus;
+window.getDisplayName = getDisplayName;
+window.allowDrop = allowDrop;
+window.dragEnter = dragEnter;
+window.dragLeave = dragLeave;
+window.dropTask = dropTask;
+window.dragEnd = dragEnd;
+window.currentTeamId = currentTeamId;
+window.userTeams = userTeams;
+window.toggleInviteModal = toggleInviteModal;
+window.closeInviteModal = closeInviteModal;
+window.joinTeam = joinTeam;
+window.switchTeam = switchTeam;
+window.saveProfile = saveProfile;
+window.saveTeam = saveTeam;

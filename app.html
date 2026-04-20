@@ -13,6 +13,7 @@
         rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+
 </head>
 
 <body>
@@ -82,9 +83,11 @@
                 </div>
             </div>
             <div class="nav-right">
-                <button class="nav-icon-btn" title="Notifications">
-                    <i data-lucide="bell" class="nav-icon"></i>
-                    <span class="notification-badge">3</span>
+                <div class="team-selector-wrapper">
+                    <select id="team-selector" class="team-selector" onchange="switchTeam(this.value)"></select>
+                </div>
+                <button class="nav-icon-btn" onclick="toggleInviteModal()">
+                    <i data-lucide="user-plus"></i>
                 </button>
                 <div class="nav-user" onclick="toggleUserMenu()">
                     <div class="nav-avatar-icon">
@@ -97,6 +100,7 @@
                         <a href="#" onclick="logout(event)">Logout</a>
                     </div>
                 </div>
+
             </div>
         </nav>
 
@@ -141,7 +145,7 @@
                 <!-- DASHBOARD -->
                 <div id="page-dashboard" class="content-page active">
                     <div class="page-header">
-                        <h2>Welcome back, <span class="text-primary">(SpaceHolder)</span></h2>
+                        <h2>Welcome back, <span id="welcome-name">User</span></h2>
                         <p>Here's what's happening with your projects today.</p>
                     </div>
                     <div class="summary-cards">
@@ -150,7 +154,7 @@
                                 <i data-lucide="check-circle"></i>
                             </div>
                             <div class="card-info">
-                                <h3 id="stat-completed">12</h3>
+                                <h3 id="stat-completed">-</h3>
                                 <p>Tasks Completed</p>
                             </div>
                         </div>
@@ -160,7 +164,7 @@
                                 <i data-lucide="refresh-cw"></i>
                             </div>
                             <div class="card-info">
-                                <h3 id="stat-progress">5</h3>
+                                <h3 id="stat-progress">-</h3>
                                 <p>In Progress</p>
                             </div>
                         </div>
@@ -170,7 +174,7 @@
                                 <i data-lucide="star"></i>
                             </div>
                             <div class="card-info">
-                                <h3 id="stat-score">87</h3>
+                                <h3 id="stat-score">-</h3>
                                 <p>Contribution Score</p>
                             </div>
                         </div>
@@ -287,27 +291,29 @@
                     <div class="settings-card">
                         <div class="settings-section">
                             <h3>Profile</h3>
+
                             <div class="form-group">
-                                <label>Display Name</label>
-                                <input type="text" value="SpaceHolder" class="settings-input">
+                                <label>Name</label>
+                                <input type="text" id="settings-name">
                             </div>
+
                             <div class="form-group">
                                 <label>Email</label>
-                                <input type="email" value="spaceholder@stu.aydin.edu.tr" class="settings-input">
+                                <input type="text" id="settings-email" disabled>
                             </div>
+
+                            <button class="btn btn-primary" onclick="saveProfile()">Save Changes</button>
                         </div>
                         <div class="settings-section">
-                            <h3>Notifications</h3>
-                            <label class="toggle-label">
-                                <input type="checkbox" checked>
-                                <span>Email notifications</span>
-                            </label>
-                            <label class="toggle-label">
-                                <input type="checkbox" checked>
-                                <span>Task reminders</span>
-                            </label>
+                            <h3>Team</h3>
+
+                            <div class="form-group">
+                                <label>Team Name</label>
+                                <input type="text" id="settings-team-name">
+                            </div>
+
+                            <button class="btn btn-primary" onclick="saveTeam()">Update Team</button>
                         </div>
-                        <button class="btn btn-primary">Save Changes</button>
                     </div>
                 </div>
             </main>
@@ -329,10 +335,6 @@
                 <div class="form-group">
                     <label for="task-assignee">Assign To</label>
                     <select id="task-assignee">
-                        <option value="Mohammed">Mohammed</option>
-                        <option value="Ali">Ali</option>
-                        <option value="Sara">Sara</option>
-                        <option value="Fatima">Fatima</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -355,7 +357,32 @@
         </div>
     </div>
 
-    <script src="./script.js"></script>
+    <div id="invite-modal" class="modal-overlay hidden">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Invite to Team</h3>
+                <button class="modal-close" onclick="closeInviteModal()">✕</button>
+            </div>
+
+            <div class="form-group">
+                <label>Your invite code</label>
+                <div class="invite-code-box" id="invite-code"></div>
+            </div>
+
+            <div class="form-group">
+                <label>Join a team</label>
+                <input type="text" id="invite-input" placeholder="Enter invite code">
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeInviteModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="joinTeam()">Join Team</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="./firebase.js"></script>
+    <script type="module" src="./script.js"></script>
     <script>
         lucide.createIcons();
     </script>

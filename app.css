@@ -2450,3 +2450,79 @@ a {
 #app {
     display: block;
 }
+
+.invite-code-box {
+    background: #0b2e53;
+    color: white;
+    padding: 12px;
+    text-align: center;
+    font-weight: bold;
+    border-radius: 8px;
+    letter-spacing: 2px;
+}
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.hidden {
+    display: none;
+}
+
+
+
+.team-selector {
+    background: #0b2e53;
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.2);
+    padding: 6px 30px 6px 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: 'Poppins', sans-serif;
+    cursor: pointer;
+    outline: none;
+
+    appearance: none;        /* remove default arrow */
+    -webkit-appearance: none;
+    -moz-appearance: none;
+
+    position: relative;
+}
+
+.team-selector-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+.team-selector-wrapper::after {
+    content: "▾";
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: white;
+    pointer-events: none;
+    font-size: 12px;
+}
+
+.team-selector:hover {
+    border-color: rgba(255,255,255,0.4);
+}
+
+.team-selector:focus {
+    border-color: #ffffff;
+    box-shadow: 0 0 0 2px rgba(255,255,255,0.15);
+}
+
+.team-selector option {
+    background: #ffffff;
+    color: #0b2e53;
+}
