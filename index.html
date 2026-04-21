@@ -20,8 +20,7 @@
     <nav class="landing-nav" id="landing-nav">
         <div class="landing-nav-inner">
             <a href="#" class="landing-nav-brand">
-                <img src="logo-bg.png"
-                    alt="Annona" class="landing-nav-logo">
+                <img src="logo-bg.png" alt="Annona" class="landing-nav-logo">
                 <span class="landing-nav-title">Annona</span>
             </a>
             <div class="landing-nav-links" id="nav-links">
@@ -201,7 +200,8 @@
                         <i data-lucide="user-plus"></i>
                     </div>
                     <h3>Create a Team</h3>
-                    <p>Sign up and create your team workspace. Invite members via email to join your project.</p>
+                    <p>Set up your team workspace and generate a unique invite code. Members can join instantly by
+                        entering the code.</p>
                 </div>
                 <div class="step-connector">
                     <i data-lucide="chevron-right"></i>
@@ -268,8 +268,7 @@
             <div class="footer-grid">
                 <div class="footer-brand">
                     <div class="footer-logo">
-                        <img src="logo-bg.png"
-                            alt="Annona" class="footer-logo-img">
+                        <img src="logo-bg.png" alt="Annona" class="footer-logo-img">
                         <span>Annona</span>
                     </div>
                 </div>
@@ -283,7 +282,15 @@
         </div>
     </footer>
 
-    <script src="./script.js"></script>
+<script>
+const menuToggle = document.getElementById("mobile-menu-btn");
+const mobileMenu = document.getElementById("mobile-menu");
+
+menuToggle.addEventListener("click", () => {
+    mobileMenu.classList.toggle("hidden");
+});
+</script>
+</script>
     <script>
         lucide.createIcons();
     </script>
