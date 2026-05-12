@@ -30,6 +30,80 @@ let unsubscribeTasks = null;
 let unsubscribeActivity = null;
 let teamUsers = [];
 let activityData = [];
+let isTeamOwner = false;
+
+async function removeMember(userId, userName) {
+    if (!isTeamOwner) return;
+
+    const confirmDelete = confirm(`Remove ${userName} from team?`);
+    if (!confirmDelete) return;
+
+    if (userId === currentUser.uid) {
+    alert("You cannot remove yourself");
+    return;
+}
+
+    try {
+        
+        // 🔥 1. Remove from teamMembers
+        const q = query(
+            collection(db, "teamMembers"),
+            where("userId", "==", userId),
+            where("teamId", "==", currentTeamId)
+        );
+
+        const snapshot = await getDocs(q);
+
+        for (const docSnap of snapshot.docs) {
+            await deleteDoc(doc(db, "teamMembers", docSnap.id));
+        }
+
+        // 🔥 2. Delete their tasks
+        const taskQuery = query(
+            collection(db, "tasks"),
+            where("assigneeId", "==", userId),
+            where("teamId", "==", currentTeamId)
+        );
+
+        const taskSnap = await getDocs(taskQuery);
+
+        for (const docSnap of taskSnap.docs) {
+            await deleteDoc(doc(db, "tasks", docSnap.id));
+        }
+
+        // 🔥 3. Delete their activity
+        const activityQuery = query(
+            collection(db, "activity"),
+            where("user", "==", userName),
+            where("teamId", "==", currentTeamId)
+        );
+
+        const activitySnap = await getDocs(activityQuery);
+
+        for (const docSnap of activitySnap.docs) {
+            await deleteDoc(doc(db, "activity", docSnap.id));
+        }
+
+        alert(`${userName} removed from team`);
+
+        // 🔄 Refresh UI
+        await loadTeamUsers();
+        renderTeam();
+        renderLeaderboard();
+
+    } catch (error) {
+        console.error("Error removing member:", error);
+    }
+}
+
+async function checkIfOwner() {
+    if (!currentUser || !currentTeamId) return;
+
+    const teamDoc = await getDoc(doc(db, "teams", currentTeamId));
+    const teamData = teamDoc.data();
+
+    isTeamOwner = teamData.ownerId === currentUser.uid;
+}
 
 async function saveTeam() {
     const newName = document.getElementById("settings-team-name").value.trim();
@@ -150,6 +224,7 @@ function switchTeam(teamId) {
         renderTeam();
         renderLeaderboard(); // 🔥
     });
+    checkIfOwner();
 }
 
 function renderTeamSelector() {
@@ -445,6 +520,7 @@ async function enterApp(user) {
     await loadTeamUsers(); // 🔥 ADD THIS
     await loadUserTeams(user.uid);
     await showInviteCode();
+    await checkIfOwner();
     listenToTasks();
     listenToActivity();
     renderTeam();
@@ -784,6 +860,14 @@ function renderTeam() {
                         <div class="stat-label">Score</div>
                     </div>
                 </div>
+                <div class="team-card-actions">
+                    <button 
+                        class="btn btn-danger remove-btn"
+                        ${!isTeamOwner ? 'disabled title="Only team leaders can remove members"' : ''}
+                        onclick="removeMember('${user.id}', '${user.name}')">
+                        Remove
+                    </button>
+                </div>
             </div>
         `;
     }).join('');
@@ -995,3 +1079,5 @@ window.joinTeam = joinTeam;
 window.switchTeam = switchTeam;
 window.saveProfile = saveProfile;
 window.saveTeam = saveTeam;
+window.removeMember = removeMember;
+window.checkIfOwner = checkIfOwner;
